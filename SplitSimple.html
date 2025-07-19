@@ -7,9 +7,640 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Todo el código CSS y JS que ya tienes aquí... -->
+    <!-- Chosen Palette: Slate & Amber -->
+    <!-- Application Structure Plan: La aplicación está diseñada en torno a un flujo de usuario de tres pasos, organizado en un diseño de tres columnas en escritorio (que se apila en móvil) para una máxima claridad. 1. (Columna Izquierda) Configuración y Entrada: Los usuarios primero definen su evento y añaden participantes. Inmediatamente debajo, se encuentra el formulario para añadir gastos. Este diseño mantiene las acciones principales agrupadas y siempre accesibles. 2. (Columna Central) Lista de Gastos: Una lista cronológica y clara de cada gasto añadido sirve como un registro transparente, permitiendo a los usuarios verificar las entradas. 3. (Columna Derecha) Resumen y Resultados: Esta columna contiene la información más crítica: el panel de saldos y el plan de liquidación. Muestra quién debe dinero, a quién se le debe, y los pagos exactos necesarios para saldar cuentas. Esta estructura fue elegida porque guía al usuario de forma natural desde la configuración inicial, pasando por la entrada de datos, hasta los resultados finales, haciendo que el proceso sea intuitivo y reduciendo la carga cognitiva. -->
+    <!-- Visualization & Content Choices: El objetivo principal es la claridad financiera, no la visualización de datos complejos. Por ello, la mayoría de la información se presenta en texto y tablas estructuradas. 1. Gasto Total del Grupo (Informar): Se presenta como un número grande y destacado (KPI) para una referencia rápida. Método: HTML/CSS. 2. Desglose de Gastos por Persona (Comparar/Informar): Un gráfico de Donut de Chart.js muestra la proporción del gasto total que corresponde a cada persona. Esto ofrece una visión general visual rápida. La interacción es a través de tooltips que muestran el monto exacto. 3. Saldos Individuales (Comparar/Informar): Una tabla HTML con estilo condicional (rojo/verde) muestra claramente quién debe y a quién se le debe. Esto es más efectivo que un gráfico para mostrar deudas precisas. 4. Plan de Liquidación (Organizar): Se utiliza una lista HTML estructurada para presentar las transacciones minimizadas necesarias para saldar las deudas. El objetivo es la simplicidad y la acción directa. Justificación: Esta combinación de un único gráfico visual para el contexto general y tablas numéricas claras para los detalles procesables proporciona la forma más rápida y menos ambigua para que los usuarios entiendan la situación financiera y la resuelvan. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .chart-container { position: relative; width: 100%; max-width: 400px; margin-left: auto; margin-right: auto; height: 300px; max-height: 350px; }
+        @media (min-width: 768px) { .chart-container { height: 350px; } }
+        .tab-button.active { border-color: #f59e0b; color: #f59e0b; font-weight: 600; }
+        .modal-backdrop {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.5); z-index: 40;
+            display: flex; align-items: center; justify-content: center;
+        }
+    </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
-    <!-- Todo el contenido HTML que ya tienes aquí... -->
+
+    <div id="app" class="container mx-auto p-4 md:p-8">
+        
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-slate-900">SplitSimple</h1>
+            <p class="text-slate-600 mt-2">La forma más fácil de dividir gastos de viajes, comidas y eventos.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- COLUMNA IZQUIERDA: CONFIGURACIÓN Y ENTRADA -->
+            <div class="lg:col-span-1 flex flex-col gap-8">
+                <!-- SECCIÓN 1: EVENTO Y PARTICIPANTES -->
+                <div class="bg-white p-6 rounded-xl shadow-sm">
+                    <h2 class="text-xl font-bold mb-1 text-slate-900">1. Configura tu Evento</h2>
+                    <p class="text-sm text-slate-500 mb-4">Empieza nombrando tu evento y añadiendo a los participantes.</p>
+                    <input type="text" id="eventName" placeholder="Ej: Viaje a la playa, Cena del viernes" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition">
+
+                    <div class="mt-4">
+                        <label class="font-semibold text-slate-700">Participantes:</label>
+                        <div id="participantsList" class="mt-2 space-y-2"></div>
+                        <div class="flex items-center gap-2 mt-2">
+                            <input type="text" id="newParticipantName" placeholder="Nombre del participante" class="flex-grow p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition">
+                            <button id="addParticipantBtn" class="bg-amber-500 text-white font-bold p-3 rounded-lg hover:bg-amber-600 transition-colors duration-200">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECCIÓN 2: AÑADIR GASTO -->
+                <div id="expenseSection" class="bg-white p-6 rounded-xl shadow-sm hidden">
+                    <h2 class="text-xl font-bold mb-1 text-slate-900">2. Añade un Gasto</h2>
+                    <p class="text-sm text-slate-500 mb-4">Registra un nuevo gasto y especifica quién lo pagó y cómo se divide.</p>
+                    <div class="space-y-4">
+                        <input type="text" id="expenseDescription" placeholder="Descripción (ej: Supermercado, Gasolina)" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition">
+                        <input type="number" id="expenseAmount" placeholder="Monto total ($)" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition">
+                        <div>
+                            <label for="expensePayer" class="block text-sm font-medium text-slate-700 mb-1">Pagado por:</label>
+                            <select id="expensePayer" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition"></select>
+                        </div>
+
+                        <div class="mt-4">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Dividir por:</label>
+                            <div class="flex gap-4">
+                                <label class="inline-flex items-center">
+                                    <input type="radio" name="splitMethod" value="equal" class="form-radio text-amber-500" checked>
+                                    <span class="ml-2 text-slate-700">Igual</span>
+                                </label>
+                                <label class="inline-flex items-center">
+                                    <input type="radio" name="splitMethod" value="exact" class="form-radio text-amber-500">
+                                    <span class="ml-2 text-slate-700">Cantidades Exactas</span>
+                                </label>
+                                <label class="inline-flex items-center">
+                                    <input type="radio" name="splitMethod" value="percentage" class="form-radio text-amber-500">
+                                    <span class="ml-2 text-slate-700">Porcentajes</span>
+                                </label>
+                            </div>
+                            <div id="splitDetailsContainer" class="mt-4 space-y-2">
+                                <!-- Dynamic split inputs will be rendered here -->
+                            </div>
+                        </div>
+
+                        <button id="addExpenseBtn" class="w-full bg-slate-800 text-white font-bold py-3 px-4 rounded-lg hover:bg-slate-700 transition-colors duration-200">Añadir Gasto</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- COLUMNA CENTRAL: LISTA DE GASTOS -->
+            <div id="expensesListContainer" class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm hidden">
+                 <h2 class="text-xl font-bold mb-1 text-slate-900">Registro de Gastos</h2>
+                 <p class="text-sm text-slate-500 mb-4">Aquí se listan todos los gastos del evento en orden cronológico.</p>
+                 <div id="expensesList" class="mt-4 space-y-3 max-h-[600px] overflow-y-auto pr-2">
+                    <p id="noExpensesMessage" class="text-center text-slate-500 py-8">Aún no hay gastos. ¡Añade el primero!</p>
+                 </div>
+            </div>
+
+            <!-- COLUMNA DERECHA: RESULTADOS -->
+            <div id="resultsContainer" class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm hidden">
+                <h2 class="text-xl font-bold mb-1 text-slate-900">Resultados Finales</h2>
+                <p class="text-sm text-slate-500 mb-4">Revisa los saldos y descubre la forma más simple de liquidar las deudas.</p>
+                
+                <div class="text-center my-4">
+                    <p class="text-slate-600 text-lg">Gasto Total del Evento</p>
+                    <p id="totalExpense" class="text-4xl font-bold text-slate-900">$0.00</p>
+                </div>
+
+                <div class="my-6">
+                    <h3 class="font-semibold text-center text-slate-700 mb-4">Desglose de Gastos por Persona</h3>
+                    <div class="chart-container">
+                        <canvas id="expenseChart"></canvas>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="font-semibold text-center text-slate-700 mb-4">Saldos</h3>
+                    <div id="balances" class="space-y-2">
+                        <p id="noBalancesMessage" class="text-center text-slate-500 py-4">Los saldos se calcularán aquí.</p>
+                    </div>
+                </div>
+
+                <div class="mt-6 pt-6 border-t border-slate-200">
+                    <h3 class="font-semibold text-center text-slate-700 mb-4">Plan de Liquidación Sugerido</h3>
+                    <div id="settlement" class="space-y-2">
+                         <p id="noSettlementMessage" class="text-center text-slate-500 py-4">Calculando la forma más simple de saldar cuentas...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const state = {
+            eventName: '',
+            participants: [],
+            expenses: [],
+        };
+
+        let expenseChart = null;
+
+        const eventNameInput = document.getElementById('eventName');
+        const newParticipantNameInput = document.getElementById('newParticipantName');
+        const addParticipantBtn = document.getElementById('addParticipantBtn');
+        const participantsListDiv = document.getElementById('participantsList');
+        const expenseSection = document.getElementById('expenseSection');
+        const expensePayerSelect = document.getElementById('expensePayer');
+        const addExpenseBtn = document.getElementById('addExpenseBtn');
+        const expenseDescriptionInput = document.getElementById('expenseDescription');
+        const expenseAmountInput = document.getElementById('expenseAmount');
+        const expensesListDiv = document.getElementById('expensesList');
+        const expensesListContainer = document.getElementById('expensesListContainer');
+        const totalExpenseEl = document.getElementById('totalExpense');
+        const balancesDiv = document.getElementById('balances');
+        const settlementDiv = document.getElementById('settlement');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const noExpensesMessage = document.getElementById('noExpensesMessage');
+        const noBalancesMessage = document.getElementById('noBalancesMessage');
+        const noSettlementMessage = document.getElementById('noSettlementMessage');
+        const splitMethodRadios = document.querySelectorAll('input[name="splitMethod"]');
+        const splitDetailsContainer = document.getElementById('splitDetailsContainer');
+
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
+        };
+
+        const renderParticipants = () => {
+            participantsListDiv.innerHTML = '';
+            expensePayerSelect.innerHTML = '<option value="" disabled selected>Selecciona quién pagó</option>';
+            state.participants.forEach((p, index) => {
+                const participantEl = document.createElement('div');
+                participantEl.className = 'flex items-center justify-between bg-slate-100 p-2 rounded-lg';
+                participantEl.innerHTML = `
+                    <span class="text-slate-800">${p}</span>
+                    <button data-index="${index}" class="remove-participant text-slate-400 hover:text-red-500 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>`;
+                participantsListDiv.appendChild(participantEl);
+
+                const optionEl = document.createElement('option');
+                optionEl.value = p;
+                optionEl.textContent = p;
+                expensePayerSelect.appendChild(optionEl);
+            });
+
+            if (state.participants.length > 1) {
+                expenseSection.classList.remove('hidden');
+                expensesListContainer.classList.remove('hidden');
+                resultsContainer.classList.remove('hidden');
+                renderSplitDetailsInputs(); // Re-render split inputs when participants change
+            } else {
+                expenseSection.classList.add('hidden');
+                expensesListContainer.classList.add('hidden');
+                resultsContainer.classList.add('hidden');
+            }
+        };
+
+        const renderExpenses = () => {
+            expensesListDiv.innerHTML = '';
+            if (state.expenses.length === 0) {
+                noExpensesMessage.style.display = 'block';
+                return;
+            }
+            noExpensesMessage.style.display = 'none';
+
+            state.expenses.slice().reverse().forEach(expense => {
+                const expenseEl = document.createElement('div');
+                expenseEl.className = 'bg-slate-50 p-3 rounded-lg border border-slate-200';
+                let splitInfo = '';
+                if (expense.splitMethod === 'equal') {
+                    splitInfo = `<p class="text-xs text-slate-400">Dividido igualmente entre ${expense.splitParticipants.length} personas</p>`;
+                } else if (expense.splitMethod === 'exact') {
+                    splitInfo = `<p class="text-xs text-slate-400">División por cantidades exactas</p>`;
+                } else if (expense.splitMethod === 'percentage') {
+                    splitInfo = `<p class="text-xs text-slate-400">División por porcentajes</p>`;
+                }
+
+                expenseEl.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div class="flex-grow">
+                            <p class="font-semibold text-slate-800">${expense.description}</p>
+                            <p class="text-sm text-slate-500">Pagado por: ${expense.payer}</p>
+                            ${splitInfo}
+                        </div>
+                        <p class="font-bold text-slate-800 whitespace-nowrap">${formatCurrency(expense.amount)}</p>
+                    </div>
+                `;
+                expensesListDiv.appendChild(expenseEl);
+            });
+        };
+        
+        const calculateAndRenderResults = () => {
+            if (state.participants.length < 2) {
+                noBalancesMessage.style.display = 'block';
+                noSettlementMessage.style.display = 'block';
+                balancesDiv.innerHTML = '';
+                settlementDiv.innerHTML = '';
+                totalExpenseEl.textContent = formatCurrency(0);
+                if (expenseChart) expenseChart.destroy();
+                return;
+            }
+
+            const totalSpent = state.expenses.reduce((sum, e) => sum + e.amount, 0);
+            totalExpenseEl.textContent = formatCurrency(totalSpent);
+
+            const balances = {};
+            state.participants.forEach(p => {
+                balances[p] = { paid: 0, owed: 0, balance: 0 };
+            });
+
+            state.expenses.forEach(expense => {
+                // Track what each person paid
+                if (balances[expense.payer]) {
+                    balances[expense.payer].paid += expense.amount;
+                }
+
+                // Track what each person owes based on split method
+                const involvedParticipants = expense.splitParticipants || state.participants; // Fallback to all if not specified
+
+                if (expense.splitMethod === 'equal') {
+                    const share = expense.amount / involvedParticipants.length;
+                    involvedParticipants.forEach(p => {
+                        if (balances[p]) balances[p].owed += share;
+                    });
+                } else if (expense.splitMethod === 'exact') {
+                    for (const p in expense.splitDetails) {
+                        if (balances[p]) balances[p].owed += expense.splitDetails[p];
+                    }
+                } else if (expense.splitMethod === 'percentage') {
+                    for (const p in expense.splitDetails) {
+                        if (balances[p]) balances[p].owed += (expense.amount * (expense.splitDetails[p] / 100));
+                    }
+                }
+            });
+
+            state.participants.forEach(p => {
+                if (balances[p]) {
+                    balances[p].balance = balances[p].paid - balances[p].owed;
+                }
+            });
+            
+            renderBalances(balances);
+            renderSettlement(balances);
+            renderChart(balances);
+        };
+
+        const renderBalances = (balances) => {
+            balancesDiv.innerHTML = '';
+             if (Object.keys(balances).length === 0 || state.expenses.length === 0) {
+                noBalancesMessage.style.display = 'block';
+                return;
+            }
+            noBalancesMessage.style.display = 'none';
+
+            for (const person in balances) {
+                const balance = balances[person].balance;
+                const balanceEl = document.createElement('div');
+                const balanceColor = balance >= 0 ? 'text-green-600' : 'text-red-600';
+                const balanceSign = balance >= 0 ? '+' : '';
+                balanceEl.className = 'flex justify-between items-center p-2 bg-slate-50 rounded-lg';
+                balanceEl.innerHTML = `
+                    <span class="font-medium">${person}</span>
+                    <span class="font-bold ${balanceColor}">${balanceSign}${formatCurrency(balance)}</span>
+                `;
+                balancesDiv.appendChild(balanceEl);
+            }
+        };
+
+        const renderSettlement = (balances) => {
+            settlementDiv.innerHTML = '';
+
+            const debtors = [];
+            const creditors = [];
+
+            for (const person in balances) {
+                if (balances[person].balance < -0.01) { // Use a small threshold for floating point
+                    debtors.push({ name: person, amount: -balances[person].balance });
+                } else if (balances[person].balance > 0.01) { // Use a small threshold for floating point
+                    creditors.push({ name: person, amount: balances[person].balance });
+                }
+            }
+
+            // Sort to ensure consistent processing (optional, but good for determinism)
+            debtors.sort((a, b) => b.amount - a.amount);
+            creditors.sort((a, b) => b.amount - a.amount);
+
+            const transactions = [];
+            let i = 0, j = 0;
+            while (i < debtors.length && j < creditors.length) {
+                const debtor = debtors[i];
+                const creditor = creditors[j];
+                const amount = Math.min(debtor.amount, creditor.amount);
+
+                if (amount > 0.01) { // Threshold to avoid tiny transactions
+                    transactions.push({ from: debtor.name, to: creditor.name, amount: amount });
+                }
+
+                debtor.amount -= amount;
+                creditor.amount -= amount;
+
+                if (debtor.amount < 0.01) i++;
+                if (creditor.amount < 0.01) j++;
+            }
+            
+            if (transactions.length === 0) {
+                settlementDiv.innerHTML = '<p class="text-center text-green-600 font-medium py-4">¡Todas las cuentas están saldadas!</p>';
+                return;
+            }
+             noSettlementMessage.style.display = 'none';
+
+            transactions.forEach(t => {
+                const transactionEl = document.createElement('div');
+                transactionEl.className = 'text-center p-2 bg-slate-50 rounded-lg';
+                transactionEl.innerHTML = `
+                    <span class="font-semibold text-red-600">${t.from}</span>
+                    <span class="text-slate-500"> debe pagar a </span>
+                    <span class="font-semibold text-green-600">${t.to}</span>
+                    <span class="font-bold text-slate-800"> ${formatCurrency(t.amount)}</span>
+                `;
+                settlementDiv.appendChild(transactionEl);
+            });
+        };
+        
+        const renderChart = (balances) => {
+            const ctx = document.getElementById('expenseChart').getContext('2d');
+            const labels = state.participants;
+            // For the chart, we want to show the total owed by each person
+            const data = labels.map(p => {
+                const personBalances = balances[p];
+                return personBalances ? personBalances.owed : 0;
+            });
+            
+            const backgroundColors = [
+                '#f59e0b', '#1e293b', '#64748b', '#facc15', '#475569', '#fbbf24', '#a8a29e', '#78716c'
+            ];
+            
+            if (expenseChart) {
+                expenseChart.destroy();
+            }
+
+            if (labels.length === 0 || data.every(val => val === 0)) {
+                return;
+            }
+
+            expenseChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Total Adeudado',
+                        data: data,
+                        backgroundColor: labels.map((_, i) => backgroundColors[i % backgroundColors.length]),
+                        borderColor: '#ffffff',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                font: {
+                                    family: "'Inter', sans-serif"
+                                },
+                                generateLabels: function(chart) {
+                                    const data = chart.data;
+                                    if (data.labels.length && data.datasets.length) {
+                                        return data.labels.map((label, i) => {
+                                            const meta = chart.getDatasetMeta(0);
+                                            const style = meta.controller.get => meta.controller.get = meta.controller.getSegment(i).options;
+                                            const value = data.datasets[0].data[i];
+                                            return {
+                                                text: `${label}: ${formatCurrency(value)}`,
+                                                fillStyle: style.backgroundColor,
+                                                strokeStyle: style.borderColor,
+                                                lineWidth: style.borderWidth,
+                                                hidden: !chart.is	DatasetVisible(0) || data.datasets[0].data[i] === 0, // Hide if value is 0
+                                                index: i
+                                            };
+                                        });
+                                    }
+                                    return [];
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed !== null) {
+                                        label += formatCurrency(context.parsed);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        const renderSplitDetailsInputs = () => {
+            splitDetailsContainer.innerHTML = '';
+            const selectedMethod = document.querySelector('input[name="splitMethod"]:checked').value;
+            const expenseAmount = parseFloat(expenseAmountInput.value) || 0;
+
+            if (selectedMethod === 'equal') {
+                if (state.participants.length > 0) {
+                    splitDetailsContainer.innerHTML = `<p class="text-slate-600">Cada uno paga ${formatCurrency(expenseAmount / state.participants.length || 0)}</p>`;
+                } else {
+                    splitDetailsContainer.innerHTML = `<p class="text-slate-500">Añade participantes para dividir.</p>`;
+                }
+            } else if (selectedMethod === 'exact' || selectedMethod === 'percentage') {
+                const unit = selectedMethod === 'exact' ? '$' : '%';
+                const inputType = selectedMethod === 'exact' ? 'number' : 'number'; // Both are numbers, but context differs
+
+                state.participants.forEach(p => {
+                    const div = document.createElement('div');
+                    div.className = 'flex items-center gap-2';
+                    div.innerHTML = `
+                        <label class="w-1/3 text-slate-700">${p}</label>
+                        <input type="${inputType}" data-participant="${p}" class="split-input w-2/3 p-2 border border-slate-300 rounded-lg focus:ring-1 focus:ring-amber-400 focus:border-amber-400 transition" placeholder="${unit}">
+                    `;
+                    splitDetailsContainer.appendChild(div);
+                });
+
+                const totalDiv = document.createElement('div');
+                totalDiv.className = 'flex justify-between items-center mt-2 pt-2 border-t border-slate-200 font-semibold';
+                totalDiv.innerHTML = `
+                    <span>Total ${selectedMethod === 'exact' ? 'Asignado' : 'Porcentaje'}</span>
+                    <span id="splitTotal" class="${selectedMethod === 'percentage' ? 'text-red-500' : 'text-slate-800'}">
+                        ${selectedMethod === 'exact' ? formatCurrency(0) : '0%'}
+                    </span>
+                `;
+                splitDetailsContainer.appendChild(totalDiv);
+
+                splitDetailsContainer.querySelectorAll('.split-input').forEach(input => {
+                    input.addEventListener('input', updateSplitTotal);
+                });
+            }
+        };
+
+        const updateSplitTotal = () => {
+            const selectedMethod = document.querySelector('input[name="splitMethod"]:checked').value;
+            const inputs = splitDetailsContainer.querySelectorAll('.split-input');
+            let currentTotal = 0;
+
+            inputs.forEach(input => {
+                currentTotal += parseFloat(input.value) || 0;
+            });
+
+            const splitTotalEl = document.getElementById('splitTotal');
+            if (splitTotalEl) {
+                if (selectedMethod === 'exact') {
+                    splitTotalEl.textContent = formatCurrency(currentTotal);
+                    const expenseAmount = parseFloat(expenseAmountInput.value) || 0;
+                    if (Math.abs(currentTotal - expenseAmount) > 0.01) {
+                        splitTotalEl.classList.add('text-red-500');
+                        splitTotalEl.classList.remove('text-slate-800');
+                    } else {
+                        splitTotalEl.classList.remove('text-red-500');
+                        splitTotalEl.classList.add('text-slate-800');
+                    }
+                } else if (selectedMethod === 'percentage') {
+                    splitTotalEl.textContent = `${currentTotal}%`;
+                    if (Math.abs(currentTotal - 100) > 0.01) {
+                        splitTotalEl.classList.add('text-red-500');
+                        splitTotalEl.classList.remove('text-slate-800');
+                    } else {
+                        splitTotalEl.classList.remove('text-red-500');
+                        splitTotalEl.classList.add('text-slate-800');
+                    }
+                }
+            }
+        };
+
+
+        const fullRender = () => {
+            renderParticipants();
+            renderExpenses();
+            calculateAndRenderResults();
+        };
+
+        addParticipantBtn.addEventListener('click', () => {
+            const name = newParticipantNameInput.value.trim();
+            if (name && !state.participants.includes(name)) {
+                state.participants.push(name);
+                newParticipantNameInput.value = '';
+                fullRender();
+            }
+        });
+        
+        newParticipantNameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addParticipantBtn.click();
+            }
+        });
+        
+        participantsListDiv.addEventListener('click', (e) => {
+            if (e.target.closest('.remove-participant')) {
+                const index = e.target.closest('.remove-participant').dataset.index;
+                const removedParticipant = state.participants[index];
+                
+                state.participants.splice(index, 1);
+                // Filter out expenses paid by or involving the removed participant
+                state.expenses = state.expenses.filter(exp => {
+                    if (exp.payer === removedParticipant) return false;
+                    if (exp.splitParticipants && exp.splitParticipants.includes(removedParticipant)) {
+                        exp.splitParticipants = exp.splitParticipants.filter(p => p !== removedParticipant);
+                        if (exp.splitDetails) delete exp.splitDetails[removedParticipant];
+                        // If only one participant left in a custom split, convert to equal among remaining
+                        if (exp.splitParticipants.length === 1 && (exp.splitMethod === 'exact' || exp.splitMethod === 'percentage')) {
+                            exp.splitMethod = 'equal';
+                            exp.splitDetails = {};
+                        } else if (exp.splitParticipants.length === 0) {
+                            // If no participants left for a split, this expense might become invalid or need special handling
+                            return false; // Remove expense if no one is left to owe
+                        }
+                    }
+                    return true;
+                });
+
+                fullRender();
+            }
+        });
+
+        splitMethodRadios.forEach(radio => {
+            radio.addEventListener('change', renderSplitDetailsInputs);
+        });
+
+        expenseAmountInput.addEventListener('input', renderSplitDetailsInputs);
+
+
+        addExpenseBtn.addEventListener('click', () => {
+            const description = expenseDescriptionInput.value.trim();
+            const amount = parseFloat(expenseAmountInput.value);
+            const payer = expensePayerSelect.value;
+            const splitMethod = document.querySelector('input[name="splitMethod"]:checked').value;
+            
+            if (!description || !(amount > 0) || !payer) {
+                alert('Por favor, completa la descripción, el monto y quién pagó el gasto.');
+                return;
+            }
+
+            let splitDetails = {};
+            let splitParticipants = [];
+
+            if (splitMethod === 'equal') {
+                splitParticipants = state.participants; // All participants share equally by default
+            } else {
+                const inputs = splitDetailsContainer.querySelectorAll('.split-input');
+                let currentTotal = 0;
+                let isValidSplit = true;
+
+                inputs.forEach(input => {
+                    const participant = input.dataset.participant;
+                    const value = parseFloat(input.value) || 0;
+                    splitDetails[participant] = value;
+                    if (value > 0) splitParticipants.push(participant);
+                    currentTotal += value;
+                });
+
+                if (splitMethod === 'exact' && Math.abs(currentTotal - amount) > 0.01) {
+                    alert('La suma de las cantidades exactas no coincide con el monto total del gasto.');
+                    isValidSplit = false;
+                } else if (splitMethod === 'percentage' && Math.abs(currentTotal - 100) > 0.01) {
+                    alert('La suma de los porcentajes no es 100%.');
+                    isValidSplit = false;
+                }
+
+                if (!isValidSplit) return;
+                if (splitParticipants.length === 0) {
+                    alert('Debes asignar el gasto al menos a un participante.');
+                    return;
+                }
+            }
+            
+            state.expenses.push({ description, amount, payer, splitMethod, splitDetails, splitParticipants });
+            expenseDescriptionInput.value = '';
+            expenseAmountInput.value = '';
+            expensePayerSelect.selectedIndex = 0;
+            document.querySelector('input[name="splitMethod"][value="equal"]').checked = true; // Reset to equal
+            renderSplitDetailsInputs(); // Clear and re-render split inputs
+            fullRender();
+        });
+        
+        eventNameInput.addEventListener('change', (e) => {
+            state.eventName = e.target.value;
+        });
+
+        fullRender();
+    });
+    </script>
 </body>
 </html>
